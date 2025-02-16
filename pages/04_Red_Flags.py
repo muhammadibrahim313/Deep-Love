@@ -1,5 +1,5 @@
 import streamlit as st
-from utils import configure_page_style, get_ai_response
+from utils import configure_page_style, get_aiml_response, display_message
 import json
 
 def red_flags_page():
@@ -82,7 +82,7 @@ def red_flags_page():
                 
                 Format with emojis and clear sections."""
                 
-                analysis = get_ai_response(prompt)
+                analysis = get_aiml_response(prompt)
                 st.markdown(analysis)
     
     # Overall analysis
@@ -114,7 +114,7 @@ def red_flags_page():
             Be constructive and supportive while being honest about concerns."""
             
             with st.spinner("Analyzing your responses..."):
-                st.session_state.analysis = get_ai_response(prompt)
+                st.session_state.analysis = get_aiml_response(prompt)
     
     if st.session_state.analysis:
         st.markdown("### Your Relationship Health Report")
