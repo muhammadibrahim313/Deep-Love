@@ -1,5 +1,24 @@
 import streamlit as st
-from utils import configure_page_style, display_message, get_ai_response
+from streamlit_mic_recorder import mic_recorder
+from utils import (
+    configure_page_style, 
+    display_message, 
+    get_aiml_response, 
+    transcribe_audio,
+    text_to_speech,
+    VOICE_OPTIONS
+)
+import base64
+
+def autoplay_audio(audio_bytes):
+    """Convert audio bytes to base64 and create an HTML audio player with autoplay"""
+    b64 = base64.b64encode(audio_bytes).decode()
+    md = f"""
+        <audio autoplay onended="this.parentElement.classList.add('audio-done')" class="stAudio">
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+        </audio>
+        """
+    st.markdown(md, unsafe_allow_html=True)
 
 def role_play_page():
     configure_page_style()
@@ -7,30 +26,49 @@ def role_play_page():
     st.title("🎭 Role Play Practice")
     st.subheader("Practice Your Dating Scenarios")
     
-    # Initialize session state
-    if "roleplay_messages" not in st.session_state:
-        st.session_state.roleplay_messages = []
-        st.session_state.current_scenario = None
-    
-    # Scenario selection
+    # Scenarios and personalities
     scenarios = {
         "First Date": {
             "description": "Practice first date conversation and body language",
-            "personalities": ["Outgoing and Fun", "Shy and Reserved", "Intellectual", "Adventure Seeker"]
+            "personalities": ["Outgoing and Fun", "Shy and Reserved", "Intellectual", "Adventure Seeker"],
+            "context": "You're meeting at a cozy café for a first date"
         },
         "Meeting Parents": {
             "description": "Practice meeting your partner's parents for the first time",
-            "personalities": ["Traditional Parents", "Modern Parents", "Protective Parents", "Easy-going Parents"]
+            "personalities": ["Traditional Parents", "Modern Parents", "Protective Parents", "Easy-going Parents"],
+            "context": "You're visiting their family home for dinner"
         },
         "Approaching Someone": {
             "description": "Practice approaching someone you're interested in",
-            "personalities": ["At a Coffee Shop", "At a Party", "At the Gym", "Through Mutual Friends"]
+            "personalities": ["At a Coffee Shop", "At a Party", "At the Gym", "Through Mutual Friends"],
+            "context": "You've noticed them and want to start a conversation"
         },
         "Difficult Conversations": {
             "description": "Practice handling challenging relationship discussions",
-            "personalities": ["Setting Boundaries", "Discussing Exclusivity", "Addressing Concerns", "Future Planning"]
+            "personalities": ["Setting Boundaries", "Discussing Exclusivity", "Addressing Concerns", "Future Planning"],
+            "context": "You need to have an important conversation"
         }
     }
+    
+    # Voice settings
+    with st.expander("Voice Settings"):
+        col1, col2 = st.columns(2)
+        with col1:
+            gender = st.selectbox("Select Voice Gender", ["Female", "Male", "Neutral"])
+        with col2:
+            voice = st.selectbox("Select Voice", VOICE_OPTIONS[gender])
+    
+    # Initialize session states
+    if "roleplay_messages" not in st.session_state:
+        st.session_state.roleplay_messages = []
+    if "recording_enabled" not in st.session_state:
+        st.session_state.recording_enabled = True
+    if "last_response" not in st.session_state:
+        st.session_state.last_response = None
+    if "audio_played" not in st.session_state:
+        st.session_state.audio_played = False
+    if "current_scenario" not in st.session_state:
+        st.session_state.current_scenario = None
     
     # Scenario setup
     col1, col2 = st.columns([2, 1])
@@ -53,73 +91,93 @@ def role_play_page():
         if st.button("Start New Scenario 🎬"):
             st.session_state.current_scenario = (scenario, personality)
             st.session_state.roleplay_messages = []
+            st.session_state.recording_enabled = True
             
             # Initial AI response
             prompt = f"""You are role-playing as a person in a {scenario} scenario with a {personality} personality.
+            Context: {scenarios[scenario]['context']}
             Start the conversation naturally as that person would. Keep responses conversational and realistic.
             Add some light description of body language or tone in [brackets]."""
             
-            response = get_ai_response(prompt)
+            response = get_aiml_response(prompt)
             if response:
                 st.session_state.roleplay_messages.append({
                     "role": "assistant",
                     "content": response
                 })
-    
-    # Chat input
-    user_input = st.text_input("Your response:", key="roleplay_input")
-    
-    if user_input:
-        st.session_state.roleplay_messages.append({
-            "role": "user",
-            "content": user_input
-        })
-        
-        # Get AI response
-        prompt = f"""Continue the {scenario} role-play as a {personality} personality.
-        Respond to: "{user_input}"
-        Keep the response natural and add body language cues in [brackets]."""
-        
-        with st.spinner("AI is responding..."):
-            response = get_ai_response(prompt)
-            if response:
-                st.session_state.roleplay_messages.append({
-                    "role": "assistant",
-                    "content": response
-                })
+                
+                # Convert to speech
+                audio_response = text_to_speech(response, voice)
+                st.session_state.last_response = audio_response
+                st.session_state.audio_played = False
                 st.rerun()
     
-    # Display conversation
-    st.markdown("### Conversation")
-    for msg in st.session_state.roleplay_messages:
+    # Display chat history
+    for message in st.session_state.roleplay_messages:
         display_message(
-            f"{'You' if msg['role'] == 'user' else 'Role-play Partner'}: {msg['content']}",
-            is_user=(msg["role"] == "user")
+            message["content"],
+            is_user=(message["role"] == "user")
         )
     
-    # Tips and feedback
-    if st.session_state.roleplay_messages:
-        with st.expander("Get Feedback on Your Interaction"):
-            if st.button("Request Feedback"):
-                conversation = "\n".join([
-                    f"{'You' if m['role'] == 'user' else 'Partner'}: {m['content']}"
-                    for m in st.session_state.roleplay_messages
-                ])
+    # Create a container for the recorder
+    recorder_container = st.empty()
+    
+    # Play last response if exists
+    if st.session_state.last_response and not st.session_state.audio_played:
+        autoplay_audio(st.session_state.last_response)
+        st.session_state.audio_played = True
+        st.session_state.last_response = None
+        st.session_state.recording_enabled = True
+    
+    # Audio recording
+    if st.session_state.recording_enabled and st.session_state.current_scenario:
+        with recorder_container:
+            audio_data = mic_recorder(
+                key="recorder",
+                start_prompt="Click to start recording",
+                stop_prompt="Click to stop recording",
+                just_once=True
+            )
+            
+            if audio_data and isinstance(audio_data, dict) and audio_data.get("bytes"):
+                # Disable recording while processing
+                st.session_state.recording_enabled = False
+                st.session_state.audio_played = False
                 
-                feedback_prompt = f"""As a dating coach, analyze this {scenario} role-play conversation:
-                {conversation}
-                
-                Provide specific feedback on:
-                1. Communication style
-                2. Response appropriateness
-                3. Areas for improvement
-                4. What was done well
-                
-                Keep the feedback constructive and encouraging."""
-                
-                feedback = get_ai_response(feedback_prompt)
-                if feedback:
-                    st.markdown(feedback)
+                # Show recording status
+                with st.spinner("Processing your message..."):
+                    # Transcribe audio
+                    transcription = transcribe_audio(audio_data["bytes"])
+                    
+                    if transcription:
+                        # Add user message
+                        st.session_state.roleplay_messages.append({
+                            "role": "user",
+                            "content": transcription
+                        })
+                        
+                        # Get AI response
+                        prompt = f"""Continue the {scenario} role-play as a {personality} personality.
+                        Context: {scenarios[scenario]['context']}
+                        Respond to: "{transcription}"
+                        Keep the response natural and in character. Add body language cues in [brackets]."""
+                        
+                        response = get_aiml_response(prompt)
+                        
+                        # Convert response to speech
+                        audio_response = text_to_speech(response, voice)
+                        
+                        # Add AI response
+                        st.session_state.roleplay_messages.append({
+                            "role": "assistant",
+                            "content": response
+                        })
+                        
+                        # Store audio response for autoplay
+                        st.session_state.last_response = audio_response
+                        
+                        # Force refresh to show new messages and play audio
+                        st.rerun()
 
 if __name__ == "__main__":
     role_play_page()
