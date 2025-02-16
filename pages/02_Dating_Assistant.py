@@ -1,5 +1,5 @@
 import streamlit as st
-from utils import configure_page_style, display_message, get_ai_response
+from utils import configure_page_style, display_message, get_aiml_response
 
 def dating_assistant_page():
     configure_page_style()
@@ -50,10 +50,24 @@ def dating_assistant_page():
                 col = cols[i % 2]
                 with col:
                     if st.button(f"💭 {prompt}", key=f"{category}_{i}"):
+                        # Add user message
                         st.session_state.dating_messages.append({
                             "role": "user",
-                            "content": f"As a dating coach, please help me with: {prompt}"
+                            "content": prompt
                         })
+                        
+                        # Get AI response with specific context
+                        with st.spinner("Getting expert advice..."):
+                            ai_prompt = f"""As a dating coach, provide specific advice about: {prompt}
+                            Keep the response practical, supportive, and include relevant emojis.
+                            Focus on actionable tips and positive encouragement."""
+                            
+                            response = get_aiml_response(ai_prompt)
+                            st.session_state.dating_messages.append({
+                                "role": "assistant",
+                                "content": response
+                            })
+                        st.rerun()
     
     st.markdown("---")
     st.markdown("### Custom Advice")
@@ -66,30 +80,41 @@ def dating_assistant_page():
     
     if st.button("Get Personalized Advice 💝", type="primary"):
         if custom_situation:
-            prompt = f"""As an empathetic and supportive dating coach, please provide advice for the following situation: 
-            {custom_situation}
-            
-            Format your response with emojis and make it encouraging and actionable."""
-            
+            # Add user message
             st.session_state.dating_messages.append({
                 "role": "user",
                 "content": custom_situation
             })
             
+            # Get AI response
             with st.spinner("Getting your personalized advice..."):
-                response = get_ai_response(prompt)
+                prompt = f"""As an empathetic dating coach, please provide advice for:
+                {custom_situation}
+                
+                Keep the response:
+                1. Supportive and understanding
+                2. Practical with specific tips
+                3. Positive and encouraging
+                4. Include relevant emojis
+                5. Focus on actionable steps"""
+                
+                response = get_aiml_response(prompt)
                 st.session_state.dating_messages.append({
                     "role": "assistant",
                     "content": response
                 })
+            st.rerun()
+        else:
+            st.warning("Please describe your situation first! 💭")
     
     # Display conversation history
-    st.markdown("### Your Advice History")
-    for message in st.session_state.dating_messages:
-        display_message(
-            message["content"],
-            is_user=(message["role"] == "user")
-        )
+    if st.session_state.dating_messages:
+        st.markdown("### Your Advice History")
+        for message in st.session_state.dating_messages:
+            display_message(
+                message["content"],
+                is_user=(message["role"] == "user")
+            )
 
 if __name__ == "__main__":
     dating_assistant_page()
