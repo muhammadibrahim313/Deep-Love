@@ -86,31 +86,13 @@ def role_play_page():
             scenarios[scenario]["personalities"]
         )
     
-    # Start new scenario
+    # Reset scenario if changed
     if (scenario, personality) != st.session_state.current_scenario:
-        if st.button("Start New Scenario 🎬"):
-            st.session_state.current_scenario = (scenario, personality)
-            st.session_state.roleplay_messages = []
-            st.session_state.recording_enabled = True
-            
-            # Initial AI response
-            prompt = f"""You are role-playing as a person in a {scenario} scenario with a {personality} personality.
-            Context: {scenarios[scenario]['context']}
-            Start the conversation naturally as that person would. Keep responses conversational and realistic.
-            Add some light description of body language or tone in [brackets]."""
-            
-            response = get_aiml_response(prompt)
-            if response:
-                st.session_state.roleplay_messages.append({
-                    "role": "assistant",
-                    "content": response
-                })
-                
-                # Convert to speech
-                audio_response = text_to_speech(response, voice)
-                st.session_state.last_response = audio_response
-                st.session_state.audio_played = False
-                st.rerun()
+        st.session_state.current_scenario = (scenario, personality)
+        st.session_state.roleplay_messages = []
+        st.session_state.recording_enabled = True
+        st.session_state.last_response = None
+        st.session_state.audio_played = False
     
     # Display chat history
     for message in st.session_state.roleplay_messages:
@@ -134,7 +116,7 @@ def role_play_page():
         with recorder_container:
             audio_data = mic_recorder(
                 key="recorder",
-                start_prompt="Click to start recording",
+                start_prompt="Click to start the conversation",
                 stop_prompt="Click to stop recording",
                 just_once=True
             )
@@ -157,10 +139,10 @@ def role_play_page():
                         })
                         
                         # Get AI response
-                        prompt = f"""Continue the {scenario} role-play as a {personality} personality.
+                        prompt = f"""You are role-playing as a person in a {scenario} scenario with a {personality} personality.
                         Context: {scenarios[scenario]['context']}
-                        Respond to: "{transcription}"
-                        Keep the response natural and in character. Add body language cues in [brackets]."""
+                        User said: "{transcription}"
+                        Respond naturally as that character would. Keep it conversational"""
                         
                         response = get_aiml_response(prompt)
                         
